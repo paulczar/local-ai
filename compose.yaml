@@ -1,0 +1,213 @@
+services:
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - ai
+    volumes:
+      - /opt/ai/ollama:/root/.ollama:Z,U
+    restart: unless-stopped
+    environment:
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_DEBUG=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    networks:
+      - ai
+    environment:
+      - ENABLE_OAUTH_SIGNUP=true
+      - OAUTH_MERGE_ACCOUNTS_BY_EMAIL=true
+      - GOOGLE_CLIENT_ID=adsasdasdasdas
+      - GOOGLE_CLIENT_SECRET=Ggrgregrerr
+    ports:
+      - "8282:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /opt/ai/open-webui/data:/app/backend/data:Z,U
+    restart: unless-stopped
+
+#  comfy-ui:
+#    container_name: comfy-ui
+#    networks: [ai]
+#    extra_hosts:
+#      - "host.docker.internal:host-gateway"
+#    ports:
+#      - "${WEBUI_PORT:-7860}:7860"
+#    volumes:
+#      - /opt/ai/stablediffusion/data:/data:Z,U
+#      - /opt/ai/stablediffusion/output:/output:Z,U
+#      - /opt/ai/stablediffusion/services/comfy/extra_model_paths.yaml:/stable-diffusion/extra_model_paths.yaml:Z
+#    #stop_signal: SIGKILL
+#    #tty: true
+#    restart: unless-stopped
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - capabilities: [gpu, compute, utility]
+#    build: ./stablediffusion/services/comfy
+#    image: sd-comfy:7
+#    environment:
+#      - CLI_ARGS=
+#
+  whisper:
+   container_name: whisper
+   image: rhasspy/wyoming-whisper
+   ports:
+     - 10300:10300
+   volumes:
+     - /opt/ai/whisper/eng/data:/data:Z,U
+   command: --model medium-int8 --language en
+   networks: [ai]
+#   deploy:
+#     resources:
+#       reservations:
+#         devices:
+#           - capabilities: [gpu]
+
+  piper:
+   container_name: piper
+   image: rhasspy/wyoming-piper
+   ports:
+     - 10200:10200
+   volumes:
+     - /opt/ai/piper/eng/data:/data:Z,U
+   command: --voice en_US-lessac-medium
+   networks: [ai]
+#   deploy:
+#     resources:
+#       reservations:
+#         devices:
+#           - capabilities: [gpu]
+
+#  n8n-import:
+#    image: n8nio/n8n:latest
+#    networks: ['ai']
+#    environment:
+#      - N8N_DIAGNOSTICS_ENABLED=false
+      #- N8N_PERSONALIZATION_ENABLED=false
+#      - N8N_ENCRYPTION_KEY=false
+      #- N8N_USER_MANAGEMENT_JWT_SECRET
+#    container_name: n8n-import
+#    entrypoint: /bin/sh
+#    command:
+#      - "-c"
+#      - "n8n import:credentials --separate --input=/backup/credentials && n8n import:workflow --separate --input=/backup/workflows"
+#    volumes:
+#      - ./n8n/backup:/backup:Z,U
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+
+  n8n:
+    container_name: n8n
+    image: n8nio/n8n:latest
+    #build: ./n8n/
+    networks: ['ai']
+    environment:
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - NODE_FUNCTION_ALLOW_EXTERNAL=*
+      - N8N_SECURE_COOKIE=false
+      - N8N_HOST=jarvis.xxxxx
+      - WEBHOOK_URL=http://jarvis.xxxx:5678
+      #- N8N_PERSONALIZATION_ENABLED=false
+      #- N8N_ENCRYPTION_KEY=false
+      #- N8N_USER_MANAGEMENT_JWT_SECRET=false
+    restart: unless-stopped
+    ports:
+      - 5678:5678
+    volumes:
+      - ./n8n/data:/home/node/.n8n:Z,U
+      #- ./n8n/backup:/backup:Z,U
+      - ./n8n/shared:/data/shared:Z,U
+    #depends_on:
+    #  n8n-import:
+    #    condition: service_completed_successfully
+
+  qdrant:
+    image: qdrant/qdrant
+    container_name: qdrant
+    networks: ['ai']
+    restart: unless-stopped
+    ports:
+      - 6333:6333
+    volumes:
+      - ./qdrant/storage:/qdrant/storage:Z,U
+
+  anythingllm:
+    image: mintplexlabs/anythingllm
+    container_name: anythingllm
+    networks: ['ai']
+    ports:
+    - "3001:3001"
+    cap_add:
+      - SYS_ADMIN
+    environment:
+    # Adjust for your environment
+      - STORAGE_DIR=/app/server/storage
+      - JWT_SECRET=""
+      - LLM_PROVIDER=ollama
+      - OLLAMA_BASE_PATH=http://ollama:11434
+      - OLLAMA_MODEL_PREF=llama3.2:8b
+      - OLLAMA_MODEL_TOKEN_LIMIT=4096
+      - EMBEDDING_ENGINE=ollama
+      - EMBEDDING_BASE_PATH=http://ollama:11434
+      - EMBEDDING_MODEL_PREF=nomic-embed-text:latest
+      - EMBEDDING_MODEL_MAX_CHUNK_LENGTH=8192
+      - VECTOR_DB=lancedb
+      - WHISPER_PROVIDER=local
+      - TTS_PROVIDER=native
+      - PASSWORDMINCHAR=8
+      # Add any other keys here for services or settings
+#      # you can find in the docker/.env.example file
+    volumes:
+      - ./anythingllm/storage:/app/server/storage:Z,U
+    restart: always
+#
+#  faster-whisper:
+#    image: lscr.io/linuxserver/faster-whisper:latest
+#    container_name: faster-whisper
+#    networks: ['ai']
+#    environment:
+#      - PUID=1000
+#      - PGID=1000
+#      - TZ=Etc/UTC
+#      - WHISPER_MODEL=tiny-int8
+#      - WHISPER_BEAM=1 #optional
+#      - WHISPER_LANG=en #optional
+#    volumes:
+#      - ./faster-whisper/config:/config:Z,U
+#    ports:
+#      - 10300:10300
+#    restart: unless-stopped
+
+#  swarm-ui:
+#    networks: [ai]
+#    container_name: swarmui
+#    image: swarmui
+#    ports:
+#      - "7801:7801"
+#    volumes:
+#      - /opt/ai/SwarmUI/Data:/Data:Z
+#      - /opt/ai/SwarmUI/dlbackend:/dlbackend:Z
+#      - /opt/ai/SwarmUI/Models:/Models:Z
+#      - /opt/ai/SwarmUI/Output:/Output:Z
+#    restart: unless-stopped
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - capabilities: ["gpu"]
+
+networks:
+  ai: {}
