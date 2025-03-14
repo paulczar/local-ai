@@ -1,2 +1,7 @@
 # local-ai
-Paul's local ai setup
+
+This is the future home of Paul's local ai guide.
+
+See [compose.yaml](compose.yaml)
+
+
